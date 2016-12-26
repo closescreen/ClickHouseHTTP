@@ -3,9 +3,7 @@ using ClickHouseHTTP
 
 ( You may `unset http_proxy` before run julia program )
 
-const CH = ClickHouseHTTP
-
-s1 = CH.RemoteServer(\"http://myserver:8123\")
+s1 = ClickHouseHTTP.RemoteServer(\"http://myserver:8123\")
 
 READONLY( s1, \"select 1\")|>readstring 
 
@@ -33,30 +31,26 @@ if !isnull( Requests.SETTINGS.http_proxy )
     info("ClickHouseHTTP: http_proxy disabled")
 end
 
-#if !isnull( Requests.SETTINGS.https_proxy )
-#    Requests.set_https_proxy( Nullable{URI}() )
-#    info("ClickHouseHTTP: https_proxy disabled")
-#end
     
-
+"""READONLY( s, \"select 1\")|>readstring"""
 READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString )::Requests.ResponseStream = 
     Requests.get_streaming( s.address, query=Dict( "query"=>query))
 
-
-function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::IO )::Requests.ResponseStream
+"""READONLY( s, \"select 1\", STDOUT)"""
+function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::IO )::Int
  stream = Requests.get_streaming( s.address, query=Dict( "query"=>query))
  write( out, stream)
 end 
 
-
-function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::AbstractString )::Requests.ResponseStream
+"""READONLY( s, \"select 1\", \"result.txt\" )"""
+function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::AbstractString )::Int
  stream = Requests.get_streaming( s.address, query=Dict( "query"=>query))
  open( _->write( _, stream),  out, "w")
 end
 
 
 import Base.write
-function write( io::IO, stream::Requests.ResponseStream )::Void
+function write( io::IO, stream::Requests.ResponseStream )::Int
  bytes=0
  while !eof( stream)
     bytes += write( io, readavailable( stream))
@@ -67,12 +61,22 @@ end
 
 typealias Iter Union{Array,IO}
 
+"""
+MODIFY allow you to do not-readonly actions in database.
+
+MODIFY( s,  \"select 1\")
+
+
+"""
 function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
  post( s.address, data=query )|>readall
 end
 
 
-function MODIFY( s::ClickHouseHTTP.RemoteServer, iter::Iter)
+"""
+MODIFY( s,  [\"select 1 FORMAT Pretty\"])|>print
+"""
+function MODIFY( s::ClickHouseHTTP.RemoteServer, iter::Iter)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
  
@@ -85,7 +89,10 @@ function MODIFY( s::ClickHouseHTTP.RemoteServer, iter::Iter)
 end
 
 
-function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter)
+"""
+MODIFY( s,  \"select 1\", [\"FORMAT Pretty\"])|>print
+"""
+function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
  

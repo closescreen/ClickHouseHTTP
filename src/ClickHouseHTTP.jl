@@ -31,10 +31,15 @@ if !isnull( Requests.SETTINGS.http_proxy )
     info("ClickHouseHTTP: http_proxy disabled")
 end
 
+
+""" s |> READONLY( query::AbstractString, ...) """
+READONLY( query::AbstractString, args... ) = (s::ClickHouseHTTP.RemoteServer)->READONLY( s, query, args...)
     
+
 """READONLY( s, \"select 1\")|>readstring"""
 READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString )::Requests.ResponseStream = 
     Requests.get_streaming( s.address, query=Dict( "query"=>query))
+
 
 """READONLY( s, \"select 1\", STDOUT)"""
 function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::IO )::Int
@@ -61,16 +66,21 @@ end
 
 typealias Iter Union{Array,IO}
 
+"s |> MODIFY(...)"
+MODIFY{T<:Union{AbstractString,Iter}}( arg1::T, args...) = (s::ClickHouseHTTP.RemoteServer)->MODIFY( s, arg1, args...)
+
+
 """
 MODIFY allow you to do not-readonly actions in database.
 
-MODIFY( s,  \"select 1\")
+MODIFY( s,  \"select 1\") |> print
 
 
 """
 function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
  post( s.address, data=query )|>readall
 end
+
 
 
 """
@@ -87,6 +97,7 @@ function MODIFY( s::ClickHouseHTTP.RemoteServer, iter::Iter)::AbstractString
 
  stream|>readstring 
 end
+
 
 
 """

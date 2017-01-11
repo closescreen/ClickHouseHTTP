@@ -5,17 +5,17 @@ using ClickHouseHTTP
 
 s1 = ClickHouseHTTP.RemoteServer(\"http://myserver:8123\")
 
-READONLY( s1, \"select 1\")|>readstring 
+readonly( s1, \"select 1\")|>readstring 
 
-MODIFY( s,  \"select 1\", [\"FORMAT Pretty\"]) |>println
+modify!( s,  \"select 1\", [\"FORMAT Pretty\"]) |>println
 
-MODIFY( s,  [\"select 1\", ""])
+modify!( s,  [\"select 1\", ""])
 
-MODIFY( s,  \"select 1\")
+modify!( s,  \"select 1\")
 
 """
 module ClickHouseHTTP
-export READONLY, MODIFY
+export readonly, modify!
 
 type RemoteServer
  address::AbstractString
@@ -32,23 +32,23 @@ if !isnull( Requests.SETTINGS.http_proxy )
 end
 
 
-""" s |> READONLY( query::AbstractString, ...) """
-READONLY( query::AbstractString, args... ) = (s::ClickHouseHTTP.RemoteServer)->READONLY( s, query, args...)
+""" s |> readonly( query::AbstractString, ...) """
+readonly( query::AbstractString, args... ) = (s::ClickHouseHTTP.RemoteServer)->readonly( s, query, args...)
     
 
-"""READONLY( s, \"select 1\")|>readstring"""
-READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString )::Requests.ResponseStream = 
+"""readonly( s, \"select 1\")|>readstring"""
+readonly( s::ClickHouseHTTP.RemoteServer, query::AbstractString )::Requests.ResponseStream = 
     Requests.get_streaming( s.address, query=Dict( "query"=>query))
 
 
-"""READONLY( s, \"select 1\", STDOUT)"""
-function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::IO )::Int
+"""readonly( s, \"select 1\", STDOUT)"""
+function readonly( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::IO )::Int
  stream = Requests.get_streaming( s.address, query=Dict( "query"=>query))
  write( out, stream)
 end 
 
-"""READONLY( s, \"select 1\", \"result.txt\" )"""
-function READONLY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::AbstractString )::Int
+"""readonly( s, \"select 1\", \"result.txt\" )"""
+function readonly( s::ClickHouseHTTP.RemoteServer, query::AbstractString, out::AbstractString )::Int
  stream = Requests.get_streaming( s.address, query=Dict( "query"=>query))
  open( _->write( _, stream),  out, "w")
 end
@@ -66,27 +66,27 @@ end
 
 typealias Iter Union{Array,IO}
 
-"s |> MODIFY(...)"
-MODIFY{T<:Union{AbstractString,Iter}}( arg1::T, args...) = (s::ClickHouseHTTP.RemoteServer)->MODIFY( s, arg1, args...)
+"s |> modify!(...)"
+modify!{T<:Union{AbstractString,Iter}}( arg1::T, args...) = (s::ClickHouseHTTP.RemoteServer)->modify!( s, arg1, args...)
 
 
 """
-MODIFY allow you to do not-readonly actions in database.
+modify! allow you to do not-readonly actions in database.
 
-MODIFY( s,  \"select 1\") |> print
+modify!( s,  \"select 1\") |> print
 
 
 """
-function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
+function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
  post( s.address, data=query )|>readall
 end
 
 
 
 """
-MODIFY( s,  [\"select 1 FORMAT Pretty\"])|>print
+modify!( s,  [\"select 1 FORMAT Pretty\"])|>print
 """
-function MODIFY( s::ClickHouseHTTP.RemoteServer, iter::Iter)::AbstractString
+function modify!( s::ClickHouseHTTP.RemoteServer, iter::Iter)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
  
@@ -101,9 +101,9 @@ end
 
 
 """
-MODIFY( s,  \"select 1\", [\"FORMAT Pretty\"])|>print
+modify!( s,  \"select 1\", [\"FORMAT Pretty\"])|>print
 """
-function MODIFY( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter)::AbstractString
+function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
  

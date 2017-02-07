@@ -26,6 +26,8 @@ string( s::RemoteServer) = s.address
 
 using Requests
 
+isopen( io::Requests.ChunkedStream ) = isopenio.io
+
 if !isnull( Requests.SETTINGS.http_proxy )
     Requests.set_proxy( Nullable{URI}() )
     info("ClickHouseHTTP: http_proxy disabled")
@@ -64,7 +66,7 @@ function write( io::IO, stream::Requests.ResponseStream )::Int
 end
 
 
-typealias Iter Union{Array,IO}
+typealias Iter Union{Array,IO,Base.Generator}
 
 "s |> modify!(...)"
 modify!{T<:Union{AbstractString,Iter}}( arg1::T, args...) = (s::ClickHouseHTTP.RemoteServer)->modify!( s, arg1, args...)
@@ -78,7 +80,7 @@ modify!( s,  \"select 1\") |> print
 
 """
 function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
- post( s.address, data=query )|>readall
+    post( s.address, data=query )|>readstring
 end
 
 
@@ -89,13 +91,20 @@ modify!( s,  [\"select 1 FORMAT Pretty\"])|>print
 function modify!( s::ClickHouseHTTP.RemoteServer, iter::Iter)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
- 
- for data_chunk in iter
-    write_chunked( stream, data_chunk)
- end
- write_chunked( stream, "")  # Signal that the body is complete
+ try
+    for data_chunk in iter
+        write_chunked( stream, data_chunk)
+    end
+    write_chunked( stream, "")  # Signal that the body is complete
+ catch e
+    warn(e)
+    for i in catch_stacktrace()
+     println(STDERR, i)
+    end
 
- stream|>readstring 
+ finally    
+    return stream|>readstring
+ end
 end
 
 
@@ -103,17 +112,28 @@ end
 """
 modify!( s,  \"select 1\", [\"FORMAT Pretty\"])|>print
 """
-function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter)::AbstractString
+function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter; debug::Bool=false)::AbstractString
  
  stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
- 
- write_chunked(stream, "$query\n" )
- for data_chunk in iter
-    write_chunked( stream, data_chunk)
+ stop = false
+ try
+    write_chunked(stream, "$query\n" )
+    for data_chunk in iter
+        stop && break
+        debug && info("DATA_CHUNK:", data_chunk)
+        write_chunked( stream, data_chunk)
+    end
+    write_chunked(stream, "")  # Signal that the body is complete
+ catch e
+    warn(e)
+    for i in catch_stacktrace()
+     println(STDERR, i)
+    end
+    stop = true
+ finally    
+    return stream|>readstring
  end
- write_chunked(stream, "")  # Signal that the body is complete
 
- stream|>readstring
 end
 
 

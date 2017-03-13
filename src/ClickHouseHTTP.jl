@@ -80,7 +80,7 @@ modify!( s,  \"select 1\") |> print
 
 """
 function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString)::AbstractString
-    post( s.address, data=query )|>readstring
+    post( s.address, data=query )|>readall 
 end
 
 
@@ -135,6 +135,47 @@ function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::I
  end
 
 end
+
+
+"""
+modify!( s,  \"select 1\", [\"FORMAT Pretty\"], 10 )|>print
+Additional parameter - batchsize. 
+"""
+function modify!( s::ClickHouseHTTP.RemoteServer, query::AbstractString, iter::Iter, batchsize; debug::Bool=false)::AbstractString
+ 
+ stream = Requests.post_streaming( s.address, headers=Dict("Transfer-Encoding"=>"chunked"), write_body=false)
+ stop = false
+ buff = Vector{AbstractString}(batchsize)
+ cnt=0
+ try
+    write_chunked(stream, "$query\n" )
+    for data_chunk in iter
+    	stop && break
+    	cnt+=1
+    	debug && info("DATA_CHUNK:", data_chunk)
+    	buff[cnt] = data_chunk
+	if cnt == batchsize
+	    write_chunked( stream, join( buff, "") )
+	    cnt = 0
+	end
+    end
+    if cnt>0
+	write_chunked( stream, join( buff[1:cnt], "") )
+    end	
+    
+    write_chunked(stream, "")  # Signal that the body is complete
+ catch e
+    warn(e)
+    for i in catch_stacktrace()
+     println(STDERR, i)
+    end
+    stop = true
+ finally    
+    return stream|>readstring
+ end
+
+end
+
 
 
 
